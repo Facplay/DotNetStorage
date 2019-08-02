@@ -139,7 +139,9 @@ namespace DotNetStorage.Net
         {
             var succeeded = StorageData.TryGetValue(key, out string raw);
             var expiryStatus = StorageExpiry.TryGetValue(key + "Expiry", out string exp);
-            if (!succeeded && !expiryStatus && !((DateTime.Parse(exp) - DateTime.Now) > TimeSpan.Zero)) throw new ArgumentNullException($"Could not find key '{key}' in the LocalStorage.");
+
+            if (!succeeded || !expiryStatus || !((DateTime.Parse(exp) - DateTime.Now) > TimeSpan.Zero))
+                throw new ArgumentNullException($"Could not find key '{key}' in the LocalStorage.");
 
             if (_config.EnableEncryption)
                 raw = CryptographyHelpers.Decrypt(_encryptionKey, _config.EncryptionSalt, raw);
@@ -292,9 +294,10 @@ namespace DotNetStorage.Net
                         }
                     }
                 }
-                catch
+                catch(Exception ex)
                 {
-                    //Para deteccion de algun tipo de  se dbe poner codigo aquí
+                    //Para deteccion de algun tipo de Excepción se debe poner codigo aquí
+                    throw new Exception(ex.Message,ex.InnerException);
                 }
             }
         }
@@ -317,26 +320,34 @@ namespace DotNetStorage.Net
 
             lock (writeLock)
             {
-                using (var fileStream = new FileStream(FileHelpers.GetLocalStoreFilePath(baseDirectory, _config.Filename),
+                try
+                {
+                    using (var fileStream = new FileStream(FileHelpers.GetLocalStoreFilePath(baseDirectory, _config.Filename),
                     mode: writemode,
                     access: FileAccess.Write))
-                {
-                    using (var writer = new StreamWriter(fileStream))
                     {
-                        writer.Write(serialized);
+                        using (var writer = new StreamWriter(fileStream))
+                        {
+                            writer.Write(serialized);
+                        }
+                    }
+
+
+
+                    using (var fileStream = new FileStream(FileHelpers.GetLocalStoreFilePath(baseDirectory, _config.Filename + "Expiry"),
+                        mode: writemodeExpiry,
+                        access: FileAccess.Write))
+                    {
+                        using (var writer = new StreamWriter(fileStream))
+                        {
+                            writer.Write(serializedExpiry);
+                        }
                     }
                 }
-            
-
-
-                using (var fileStream = new FileStream(FileHelpers.GetLocalStoreFilePath(baseDirectory, _config.Filename + "Expiry"),
-                    mode: writemodeExpiry,
-                    access: FileAccess.Write))
+                catch(Exception ex)
                 {
-                    using (var writer = new StreamWriter(fileStream))
-                    {
-                        writer.Write(serializedExpiry);
-                    }
+                    //Para deteccion de algun tipo de Excepción se debe poner codigo aquí
+                    throw new Exception(ex.Message, ex.InnerException);
                 }
             }
         }
